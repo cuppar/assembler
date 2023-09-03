@@ -3,7 +3,7 @@ use std::{
     io::{self, Read},
 };
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 enum InstructionType {
     AInstruction,
     CInstruction,
@@ -47,7 +47,7 @@ impl InstructionType {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 struct Instruction {
     ins_type: InstructionType,
     ins_raw: String,
@@ -105,7 +105,17 @@ impl Parser {
     }
 
     fn symbol(&self) -> String {
-        "".to_string()
+        assert!(
+            self.current_instruction.is_some(),
+            "Can't call symbol() when have not instruction"
+        );
+        let ins = self.current_instruction.clone().unwrap();
+        use InstructionType::*;
+        match ins.ins_type {
+            AInstruction => ins.ins_raw[1..].to_string(),
+            LInstruction => ins.ins_raw[1..(ins.ins_raw.len() - 1)].to_string(),
+            CInstruction => panic!("Can't call symbol() in a C-Instruction"),
+        }
     }
     fn dest(&self) -> String {
         "".to_string()
@@ -176,6 +186,7 @@ mod tests {
         test_file.add_line(" (LOOP) //comment3")?;
         test_file.add_line(" @123 //comment4")?;
         test_file.add_line(" M=1 //comment5")?;
+        test_file.add_line("//comment6")?;
         let mut parser = Parser::new(&test_file.path)?;
         let prev_nln = parser.next_line_number;
 
@@ -217,21 +228,68 @@ mod tests {
             })
         );
         assert_eq!(parser.next_line_number, prev_nln + 6);
+        assert!(parser.has_more_lines());
+
+        parser.advance();
+
+        assert_eq!(
+            parser.current_instruction,
+            Some(Instruction {
+                ins_raw: String::from("M=1"),
+                ins_type: InstructionType::CInstruction
+            })
+        );
+        assert_eq!(parser.next_line_number, prev_nln + 7);
         assert!(!parser.has_more_lines());
 
         Ok(())
     }
 
-    // todo
-    // #[test]
-    // fn test_symbol() -> io::Result<()> {
-    //     let test_file = TestFile::new()?;
-    //     let parser = Parser::new(&test_file.path)?;
+    #[test]
+    fn test_symbol() -> io::Result<()> {
+        let mut test_file = TestFile::new()?;
+        test_file.clear()?;
+        test_file.add_line("(LOOP)")?;
+        test_file.add_line("@123")?;
+        test_file.add_line("@num")?;
+        let mut parser = Parser::new(&test_file.path)?;
 
-    //     assert_eq!();
+        parser.advance();
+        assert_eq!(parser.symbol(), "LOOP".to_string());
 
-    //     Ok(())
-    // }
+        parser.advance();
+        assert_eq!(parser.symbol(), "123".to_string());
+
+        parser.advance();
+        assert_eq!(parser.symbol(), "num".to_string());
+
+        Ok(())
+    }
+
+    #[test]
+    #[should_panic = "Can't call symbol() in a C-Instruction"]
+    fn test_symbol_panic_in_c_ins() {
+        let mut test_file = TestFile::new().unwrap();
+        test_file.clear().unwrap();
+        test_file.add_line("M=1").unwrap();
+        let mut parser = Parser::new(&test_file.path).unwrap();
+
+        parser.advance();
+        // should panic
+        parser.symbol();
+    }
+
+    #[test]
+    #[should_panic = "Can't call symbol() when have not instruction"]
+    fn test_symbol_panic_in_no_ins() {
+        let mut test_file = TestFile::new().unwrap();
+        test_file.clear().unwrap();
+        test_file.add_line("//comment").unwrap();
+        let parser = Parser::new(&test_file.path).unwrap();
+
+        // should panic
+        parser.symbol();
+    }
 
     // test template
     // #[test]

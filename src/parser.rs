@@ -58,6 +58,7 @@ pub struct Instruction {
 pub struct Parser {
     lines: Vec<String>,
     next_line_number: usize,
+    pub next_ins_address: usize,
     pub current_instruction: Option<Instruction>,
 }
 
@@ -71,6 +72,7 @@ impl Parser {
         Ok(Self {
             lines,
             next_line_number: 0,
+            next_ins_address: 0,
             current_instruction: None,
         })
     }
@@ -99,6 +101,9 @@ impl Parser {
             if line != "" {
                 let ins_raw = line.to_string();
                 let ins_type = InstructionType::get_type(&ins_raw);
+                if ins_type != InstructionType::LInstruction {
+                    self.next_ins_address += 1;
+                }
                 self.current_instruction = Some(Instruction { ins_type, ins_raw });
                 return;
             }
@@ -254,6 +259,7 @@ mod tests {
 
         assert_eq!(parser.current_instruction, None);
         assert_eq!(prev_nln, 0);
+        assert_eq!(parser.next_ins_address, 0);
         assert!(parser.has_more_lines());
 
         parser.advance();
@@ -266,6 +272,7 @@ mod tests {
             })
         );
         assert_eq!(parser.next_line_number, prev_nln + 4);
+        assert_eq!(parser.next_ins_address, 0);
         assert!(parser.has_more_lines());
 
         parser.advance();
@@ -278,6 +285,7 @@ mod tests {
             })
         );
         assert_eq!(parser.next_line_number, prev_nln + 5);
+        assert_eq!(parser.next_ins_address, 1);
         assert!(parser.has_more_lines());
 
         parser.advance();
@@ -290,6 +298,7 @@ mod tests {
             })
         );
         assert_eq!(parser.next_line_number, prev_nln + 6);
+        assert_eq!(parser.next_ins_address, 2);
         assert!(parser.has_more_lines());
 
         parser.advance();
